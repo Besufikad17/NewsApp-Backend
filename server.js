@@ -5,8 +5,14 @@ const route = require('./routes/routes');
 const mongoose = require('mongoose');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
+const config = require('config');
+const db = config.get('mongoURI');
 
-mongoose.connect("mongodb://localhost:27017/usersDB", { useNewUrlParser: true });
+// const jsonParser = bodyParser.json();
+// const urlencodedParser = bodyParser.urlencoded({extended: false})
+// app.use(require('connect').bodyParser());
+
+mongoose.connect(db, { useNewUrlParser: true, useCreateIndex: true });
 mongoose.Promise = global.Promise;
 mongoose.connection.on('error', (err) => {
   console.log('Error in the database:', err);
@@ -25,7 +31,7 @@ app.use((req,res,next) => {
 })
 
 app.use(helmet());
-app.use('/api', route)
 app.use(cors());
 app.use(express.json())
+app.use('/api', route)
 app.listen(5000);

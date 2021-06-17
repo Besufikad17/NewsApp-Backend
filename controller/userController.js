@@ -1,30 +1,54 @@
-const Article = require('../models/articleModel');
 const User = require('../models/userModel');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs');
 const userController = {};
+const config = require('config');
+
 
 userController.signup = async (req, res) => {
-    const newAcccount = new User({
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        gender: req.body.gender,
-        username: req.body.username,
-        email: req.body.email,
-        password: req.body.password,
-        articles: req.body.articles,
-    })
+    const { username, email, password } = req.body;
 
-    jwt.sign({ newAcccount }, 'secretKey', (err, token) => {
-        //console.log(token)
-        let userInfo = {
-            user: newAcccount,
-            token: token
-        }
-        res.json(userInfo)
-    })
-    //console.log(newAcccount);
-    newAcccount.save();
+    //simple validation
+    if (!username || !email || !password) {
+        return res.status(400).json({ msg: 'Please enter all fields' });
+    }
+
+    //checking for existing user
+    User.findOne({ email })
+        .then(user => {
+            if (user) {
+                return res.status(400).json({ msg: 'User already exists!!' });
+            } else {
+                const newAcccount = new User({
+                    username,
+                    email,
+                    password
+                })
+
+                //create salt and hash
+                bcrypt.genSalt(10, (err, salt) => {
+                    bcrypt.hash(newAcccount.password, salt, (err, hash) => {
+                        if (err) throw err;
+                        newAcccount.password = hash;
+                        newAcccount.save().
+                            then(user => {
+                                jwt.sign({ id: user.id }, config.get('jwtSecret'), { expiresIn: 3600 }, (err, token) => {
+                                    if (err) throw err;
+                                    res.json({
+                                        token,
+                                        user: {
+                                            id: user.id,
+                                            username: user.username,
+                                            email: user.email
+                                        }
+                                    })
+                                })
+                            })
+                    })
+                })
+            }
+        })
 }
 
 userController.login = async (req, res) => {
@@ -34,26 +58,44 @@ userController.login = async (req, res) => {
         password: req.body.password
     }).exec((err, user) => {
         if (err) {
+            res.status(400).send({ message: err });
             res.status(500).send({ message: err });
             return;
         }
         if (user) {
-            res.status(200).send({user: user});
+            jwt.sign({ user }, 'secretKey', (err, token) => {
+                //console.log(token)
+                let userInfo = {
+                    user: user,
+                    token: token
+                }
+                res.json(userInfo)
+            })
         }
     })
 }
 
 userController.saveArticle = async (req, res) => {
-    console.log(getUserById(req,res))
-    
+    const {id, article_id} = req.body;
+    User.updateOne({_id: id}, {$push: {articles: article_id}}, function(obj, err){
+        if(err) return res.json({err})
+        return res.json(obj)
+    })
 }
+
+userController.removeArticle = async (req,res) => {
+    const {id, article_id} = req.body;
+    User.updateOne({_id: id}, {$pull: {articles: article_id}}, function(obj, err){
+        if(err) return res.json({err})
+        return res.json(User.findById(id))
+    })
+} 
 
 userController.getAllUsers = async (req, res) => {
     User.find({}, function (err, users) {
         if (users) {
             res.json(users)
         }
-
         if (err) {
             res.json(err)
         }
@@ -62,7 +104,7 @@ userController.getAllUsers = async (req, res) => {
 
 userController.getUserById = async (req, res) => {
     console.log(req.params)
-    User.findOne({ _id:{ $in: mongoose.Types.ObjectId( req.params.id)} }, function (err, user) {
+    User.findOne({ _id: { $in: mongoose.Types.ObjectId(req.params.id) } }, function (err, user) {
         if (user) {
             res.json(user)
         }
@@ -75,7 +117,7 @@ userController.getUserById = async (req, res) => {
 
 userController.getUserByUsername = async (req, res) => {
     console.log(req.params.username)
-    User.find({ username:req.params.username}, function (err, user) {
+    User.find({ username: req.params.username }, function (err, user) {
         if (user) {
             res.send(user)
         }

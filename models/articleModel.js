@@ -21,6 +21,14 @@ const articleSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    score: {
+        type: Number,
+        default: 0,
+    },
+    report_tag:{
+        type: String,
+        default: null
+    }
 });
 
 module.exports = mongoose.model('Article', articleSchema);
